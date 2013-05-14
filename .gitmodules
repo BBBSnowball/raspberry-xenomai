@@ -1,0 +1,10 @@
+[submodule "linux"]
+	path = linux
+#	url = https://github.com/raspberrypi/linux
+	url = https://github.com/bootc/linux.git
+[submodule "tools"]
+	path = tools
+	url = https://github.com/raspberrypi/tools
+[submodule "xenomai"]
+	path = xenomai
+	url = git://git.xenomai.org/xenomai-2.6.git
