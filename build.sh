@@ -18,6 +18,10 @@
 #     lib32z1:         for build tools on x64 host
 #     libncurses5-dev: only for 'make menuconfig'
 
+#NOTE All config files snould have a trailing newline! If you use vi
+#     or nano, they will automatically do the right thing.
+#     http://dbaspot.com/shell/381104-howto-read-file-line-line-bash.html
+
 # The kernel should be used with Rasbian:
 # download Raspbian from http://www.raspberrypi.org/downloads
 
@@ -77,23 +81,51 @@ fi
 # break immediately, if anything fails
 set -e
 
+at_step() {
+	echo
+	echo "==== $1 ===="
+
+	# set title
+	#TODO only, if we have a tty...
+	echo -ne '\033k'"$1"'\033\\'
+}
+
+# we may have to fetch the submodules
+at_step "fetch dependencies"
+#if [ ! -d "linux" -o ! -d "tools" -o ! -d "xenomai" ] ; then
+	git submodule init
+	git submodule update
+#fi
+
 # checkout right version of kernel and xenomai and kill
 # any changes and unversioned files
 #NOTE Yes, this is dangerous, but we need that for an
 #     unattended build.
 #TODO Add a very scary note to all the places that a user
 #     will read before running the script.
-if [ "$CLEAN_SOURCES" -gt 0 ] ; then
+if [ "$CLEAN_SOURCES" -gt 0 -a -e "$CONFIG/versions" ] ; then
+	at_step "clean sources"
 	#NOTE This cleans only those repos that have a version
 	#     requirement in the config file.
 	while read name version ; do
-		# reset any changed
-		( cd "$name" && git reset --hard HEAD )
-		# delete unversioned files
-		( cd "$name" && git clean -f -d -x )
-		# get the version we want
-		( cd "$name" && git checkout "$version" )
+		# ignore comments and empty lines
+		if [[ $name != "" ]] && [[ $name != \#* ]] ; then
+			echo "clean $name and checkout $version..."
+			# reset any changed
+			( cd "$name" && git reset --hard HEAD )
+			# delete unversioned files
+			( cd "$name" && git clean -f -d -x )
+			# get the version we want
+			( cd "$name" && git checkout "$version" )
+		fi
 	done < "$CONFIG/versions"
+
+	# read ignores the last line, if it doesn't end with a
+	# newline, so we fail in that case
+	if [ -n "$name" -o -n "$version" ] ; then
+		echo "ERROR: config file $CONFIG/versions doesn't have a trailing newline!" >&2
+		exit 1
+	fi
 fi
 
 # the directories we're going to use
@@ -115,6 +147,7 @@ export CROSS_COMPILE=arm-bcm2708-linux-gnueabi-
 source "$CONFIG/config"
 
 # can we access the compiler?
+at_step "test compiler"
 if ! arm-bcm2708-linux-gnueabi-gcc --version ; then
 	if which arm-bcm2708-linux-gnueabi-gcc >/dev/null ; then
 		echo "ARM compiler exists and is in PATH, but we cannot run it." >&2
@@ -128,19 +161,34 @@ fi
 
 
 # clean kernel before applying the patches
+at_step "clean linux tree"
 make -C "$linux_tree" mrproper
 
 # apply Xenomai patch to kernel
-$xenomai_root/scripts/prepare-kernel.sh --arch="$ARCH" --adeos="$ADEOS_PATCH" --linux="$linux_tree"
+at_step "prepare linux tree for xenomai"
+"$xenomai_root/scripts/prepare-kernel.sh" --arch="$ARCH" --adeos="$ADEOS_PATCH" --linux="$linux_tree"
 
 # apply our patches
+at_step "apply patches"
 if [ -e "$CONFIG/patches" ] ; then
 	while read dir patch ; do
-		patch -f -p1 -d "$dir" < "$CONFIG/$patch"
+		# ignore comments and empty lines
+		if [[ $dir != "" ]] && [[ $dir != \#* ]] ; then
+			echo "$dir: $CONFIG/$patch"
+			patch -f -p1 -d "$dir" < "$CONFIG/$patch"
+		fi
 	done < "$CONFIG/patches"
+
+	# read ignores the last line, if it doesn't end with a
+	# newline, so we fail in that case
+	if [ -n "$dir" -o -n "$patch" ] ; then
+		echo "ERROR: config file $CONFIG/patches doesn't have a trailing newline!" >&2
+		exit 1
+	fi
 fi
 
 # clean build directories
+at_step "clean build directories"
 rm -rf "$build_root"
 mkdir -p "$build_root/"{linux,linux-modules,xenomai,xenomai-staging}
 
@@ -158,22 +206,27 @@ cp "$KERNEL_CONFIG" "$build_root/linux/.config"
 
 # if you want to change some options
 #sudo aptitude install libncurses5-dev
-#make menuconfig
+#make menuconfig ARCH=arm
 
 # build tools need some 32-bit libraries
 #aptitude install lib32z1
 
 # kernel will be in $build_root/linux/arch/arm/boot/Image -> copy to rpi:/boot/kernel.img
 #TODO use hardfloat?
+at_step "build kernel"
 make -C linux "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
 cp "$build_root/linux/arch/arm/boot/Image" "$build_root/kernel.img"
-make -C modules_install "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
+at_step "pack kernel modules"
+make -C linux modules_install "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
 # -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
-tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
+##tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
+tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" --exclude=source --exclude=build lib
 #scp "$build_root/linux-modules.tar.bz2" rpi:
 #ssh root@rpi tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
 
 # build xenomai
+at_step "build xenomai"
+
 mkdir -p "$build_root/xenomai"
 # manual suggests that we add -march=armv4t to CFLAGS and LDFLAGS - I don't know
 # the correct value for RPi, so I use the ones that the kernel uses (determined
@@ -190,7 +243,8 @@ make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging"
 # Use install-data-am instead of install to avoid creating the devices which
 # will fail, if we're not root. You have to do something like 'make devices'
 # on the Raspberry to create them.
-make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging" install-data-am
+at_step "pack xenomai"
+make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging" install-user
 tar -C "$build_root/xenomai-staging" -cjf "$build_root/xenomai-for-pi.tar.bz2" .
 #scp "$build_root/xenomai-for-pi.tar.bz2" rpi:
 #ssh root@rpi tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
