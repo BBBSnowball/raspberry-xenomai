@@ -67,22 +67,28 @@ Install
 
 This does NOT work, yet. Please see the details in the next section.
 
-1. copy the files to your Raspberry Pi
-  scp linux-modules.tar.bz2 kernel.img xenomai-for-pi.tar.bz2 raspberry:
-2. open a root shell on the Pi - all further steps have to be done on the Pi
-  ssh raspberry # or mosh raspberry, if you prefer
-  sudo -s
-3. move kernel to /boot partition
-  cp /boot/kernel.img ~/kernel.img.backup
-  cp ~/kernel.img /boot/kernel.img
-4. unpack linux modules
-  tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
-5. unpack Xenomai runtime and development files
-  tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
-6. reboot the Pi and hope that it works
-  reboot
-7. try Xenomai
-  /usr/xenomai/bin/latency
+1. copy the files to your Raspberry Pi<br/>
+    `scp linux-modules.tar.bz2 kernel.img xenomai-for-pi.tar.bz2 raspberry:`
+  
+2. open a root shell on the Pi - all further steps have to be done on the Pi<br/>
+    `ssh raspberry # or mosh raspberry, if you prefer`<br/>
+    `sudo -s`
+
+3. move kernel to /boot partition<br/>
+  `cp /boot/kernel.img ~/kernel.img.backup`<br/>
+  `cp ~/kernel.img /boot/kernel.img`
+
+4. unpack linux modules<br/>
+  `tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner`
+
+5. unpack Xenomai runtime and development files<br/>
+  `tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner`
+
+6. reboot the Pi and hope that it works<br/>
+  `reboot`
+
+7. try Xenomai; this will most likely fail - see next section<br/>
+  `/usr/xenomai/bin/latency`
 
 Library path issues
 -------------------
