@@ -87,7 +87,9 @@ This does NOT work, yet. Please see the details in the next section.
 6. reboot the Pi and hope that it works<br/>
   `reboot`
 
-7. try Xenomai; this will most likely fail - see next section<br/>
+7. create device files: see next section
+
+8. try Xenomai; this will most likely fail - see next section<br/>
   `/usr/xenomai/bin/latency`
 
 Library path issues
@@ -97,3 +99,9 @@ Xenomai lives in /usr/xenomai instead of /usr (as most software). Therefore, the
 the library and the programs won't start. I tried a few simple hacks, but none of them made it work (don't
 try to copy the files to /usr - it won't work). On my test setup, I have solved it by compiling Xenomai on
 the Pi. I'm still trying to find a better way.
+
+This also creates the device nodes. We could deliver them in the Xenomai tar ball, but then we would have to
+be the root user on the build system. You can run `make devices` in the Xenomai source tree to create the
+device files.
+
+I hope that both problems can be solved by using deb packages instead of tar balls, but I'm still working on that.
