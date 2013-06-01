@@ -78,5 +78,7 @@ at_step() {
 	echo "==== $1 ===="
 
 	# set title, if we are running in screen
-	[ "$TERM" == screen ] && echo -ne '\033k'"$1"'\033\\'
+	if [ "$TERM" == screen ] ; then
+		echo -ne '\033k'"$1"'\033\\'
+	fi
 }
