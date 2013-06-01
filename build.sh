@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# VERSION: 1.0.0 (major.minor.patch)
+# Change major or minor version, if the build result may
+# change because of your edits to this script. All configurations
+# will be rebuilt. A change to the 3rd number won't cause a
+# rebuild.
+
 # This script is based on this guide:
 # http://diy.powet.eu/2012/07/25/raspberry-pi-xenomai/
 # If the script doesn't work, you may want to use the guide. I have
@@ -30,13 +36,18 @@
 # http://www.xenomai.org/documentation/xenomai-2.6/html/README.INSTALL/
 # http://linuxcnc.mah.priv.at/rpi/rpi-rtperf.html
 
+# break immediately, if anything fails
+set -e
+
 # go to root folder of our git
 cd "$(dirname "$0")"
 
 # read arguments
+ARGS=("$@")
 CONFIGNAME=""
 CLEAN_SOURCES=0
 SHOW_USAGE=0
+REBUILD=0
 while test "$#" -gt 0 ; do
 	case "$1" in
 		-h|--help)
@@ -45,9 +56,12 @@ while test "$#" -gt 0 ; do
 		--clean-sources)
 			CLEAN_SOURCES=1
 			;;
+		--rebuild)
+			REBUILD=1
+			;;
 		*)
 			if [ -n "$CONFIGNAME" ] ; then
-				echo "We already have a config." >&2
+				echo "We already have a config ($CONFIGNAME)." >&2
 				SHOW_USAGE=1
 			fi
 			CONFIGNAME="$1"
@@ -60,11 +74,18 @@ done
 if [ "$SHOW_USAGE" -gt 0 -o -z "$CONFIGNAME" -o ! -d "config/$1" ] ; then
 	echo "Usage: $0 configuration-name" >&2
 	echo "  --clean-sources  Kill changes and unversioned files in submodules"
+	echo "  --rebuild        Rebuild, even if it seems to be up-to-date"
 	echo "Valid configurations:" >&2
 	ls -1 config | sed 's/^/  /' >&2
 	exit 1
 fi
 CONFIG="config/$CONFIGNAME"
+
+# exit early, if build is up-to-date
+if [ "$REBUILD" -le "0" ] && ./up-to-date.sh --quiet "${ARGS[@]}" ; then
+	echo "already up-to-date"
+	exit 0
+fi
 
 if [ "$CLEAN_SOURCES" -le 0 ] ; then
 	echo "=========================================" >&2
@@ -77,9 +98,6 @@ if [ "$CLEAN_SOURCES" -le 0 ] ; then
 	echo "care!"                                     >&2
 	echo "=========================================" >&2
 fi
-
-# break immediately, if anything fails
-set -e
 
 at_step() {
 	echo
@@ -191,6 +209,10 @@ fi
 at_step "clean build directories"
 rm -rf "$build_root"
 mkdir -p "$build_root/"{linux,linux-modules,xenomai,xenomai-staging}
+
+# save dependency information
+./dependency-info.sh "${ARGS[@]}" >"$build_root/dependency-info.txt" \
+	|| rm -rf "$build_root/dependency-info.txt"
 
 # copy kernel config to build directory
 cp "$KERNEL_CONFIG" "$build_root/linux/.config"
