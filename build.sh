@@ -103,9 +103,8 @@ at_step() {
 	echo
 	echo "==== $1 ===="
 
-	# set title
-	#TODO only, if we have a tty...
-	echo -ne '\033k'"$1"'\033\\'
+	# set title, if we are running in screen
+	[ "$TERM" == screen ] && echo -ne '\033k'"$1"'\033\\'
 }
 
 # we may have to fetch the submodules
