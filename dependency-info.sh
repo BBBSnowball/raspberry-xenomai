@@ -2,58 +2,23 @@
 
 # This script prints information about all dependencies of a configuration.
 
-# break immediately, if anything fails
-set -e
-
-# file dependencies
-DEP_FILES=();
-
-BUILD_SH_VERSION="$(sed -n 's/^\#\s*VERSION:\s*\([0-9]\+\.[0-9]\+\).*/\1/p' build.sh)"
-echo "build.sh version: $BUILD_SH_VERSION"
 
 # go to root folder of our git
 cd "$(dirname "$0")"
 
-# read arguments
-CONFIGNAME=""
-CLEAN_SOURCES=0
-SHOW_USAGE=0
-while test "$#" -gt 0 ; do
-	case "$1" in
-		-h|--help)
-			SHOW_USAGE=1
-			;;
-		--clean-sources|--rebuild|--quiet)
-			# You may pass the same arguments as for
-			# build.sh, but we ignore them.
-			;;
-		*)
-			if [ -n "$CONFIGNAME" ] ; then
-				echo "We already have a config." >&2
-				SHOW_USAGE=1
-			fi
-			CONFIGNAME="$1"
-			;;
-	esac
-	shift
-done
+show_additional_arguments() {
+	echo -n 	# we don't have additional arguments
+}
 
-# first argument should be the configuration to build
-if [ "$SHOW_USAGE" -gt 0 -o -z "$CONFIGNAME" -o ! -d "config/$1" ] ; then
-	echo "This script prints information about all dependencies of a configuration."
-	echo "Usage: $0 configuration-name" >&2
-	echo "Valid configurations:" >&2
-	ls -1 config | sed 's/^/  /' >&2
-	exit 1
-fi
-CONFIG="config/$CONFIGNAME"
+source helper/parse-args-and-init.sh
 
-# the directories we're going to use
-basedir="$(readlink -f .)"
-linux_tree="$basedir/linux"
-xenomai_root="$basedir/xenomai"
-rpi_tools="$basedir/tools"
-build_root="$basedir/build/$CONFIGNAME"
+
+# file dependencies
+DEP_FILES=();
+
+# record version of build.sh
+BUILD_SH_VERSION="$(sed -n 's/^\#\s*VERSION:\s*\([0-9]\+\.[0-9]\+\).*/\1/p' build.sh)"
+echo "build.sh version: $BUILD_SH_VERSION"
 
 # run config script
 CONFIG_DEPENDENCIES=yes

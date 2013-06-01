@@ -42,44 +42,13 @@ set -e
 # go to root folder of our git
 cd "$(dirname "$0")"
 
-# read arguments
-ARGS=("$@")
-CONFIGNAME=""
-CLEAN_SOURCES=0
-SHOW_USAGE=0
-REBUILD=0
-while test "$#" -gt 0 ; do
-	case "$1" in
-		-h|--help)
-			SHOW_USAGE=1
-			;;
-		--clean-sources)
-			CLEAN_SOURCES=1
-			;;
-		--rebuild)
-			REBUILD=1
-			;;
-		*)
-			if [ -n "$CONFIGNAME" ] ; then
-				echo "We already have a config ($CONFIGNAME)." >&2
-				SHOW_USAGE=1
-			fi
-			CONFIGNAME="$1"
-			;;
-	esac
-	shift
-done
-
-# first argument should be the configuration to build
-if [ "$SHOW_USAGE" -gt 0 -o -z "$CONFIGNAME" -o ! -d "config/$1" ] ; then
-	echo "Usage: $0 configuration-name" >&2
+# used by parse-args-and-init.sh
+show_additional_arguments() {
 	echo "  --clean-sources  Kill changes and unversioned files in submodules"
 	echo "  --rebuild        Rebuild, even if it seems to be up-to-date"
-	echo "Valid configurations:" >&2
-	ls -1 config | sed 's/^/  /' >&2
-	exit 1
-fi
-CONFIG="config/$CONFIGNAME"
+}
+
+source helper/parse-args-and-init.sh
 
 # exit early, if build is up-to-date
 if [ "$REBUILD" -le "0" ] && ./up-to-date.sh --quiet "${ARGS[@]}" ; then
@@ -98,14 +67,6 @@ if [ "$CLEAN_SOURCES" -le 0 ] ; then
 	echo "care!"                                     >&2
 	echo "=========================================" >&2
 fi
-
-at_step() {
-	echo
-	echo "==== $1 ===="
-
-	# set title, if we are running in screen
-	[ "$TERM" == screen ] && echo -ne '\033k'"$1"'\033\\'
-}
 
 # we may have to fetch the submodules
 at_step "fetch dependencies"
@@ -145,22 +106,11 @@ if [ "$CLEAN_SOURCES" -gt 0 -a -e "$CONFIG/versions" ] ; then
 	fi
 fi
 
-# the directories we're going to use
-basedir="$(readlink -f .)"
-linux_tree="$basedir/linux"
-xenomai_root="$basedir/xenomai"
-rpi_tools="$basedir/tools"
-build_root="$basedir/build/$CONFIGNAME"
-
-# variables for the build
-export PATH="$PATH:$rpi_tools/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin"
-export ARCH=arm
-export CROSS_COMPILE=arm-bcm2708-linux-gnueabi-
-
 # config script may change the variables and it has to
 # set some additional variables:
 # ADEOS_PATCH="$xenomai_root/ksrc/arch/arm/patches/ipipe-core-3.2.21-arm-1.patch"
 # KERNEL_CONFIG=...
+at_step "load config"
 source "$CONFIG/config"
 
 # can we access the compiler?
@@ -168,7 +118,7 @@ at_step "test compiler"
 if ! arm-bcm2708-linux-gnueabi-gcc --version ; then
 	if which arm-bcm2708-linux-gnueabi-gcc >/dev/null ; then
 		echo "ARM compiler exists and is in PATH, but we cannot run it." >&2
-		echo "You may have to install TODO." >&2
+		echo "You may have to install something (TODO: find out dependencies)." >&2
 		exit 1
 	else
 		echo "Couldn't find ARM compiler, but it should be in the tools git. This is weird. Sorry." >&2
@@ -210,8 +160,8 @@ rm -rf "$build_root"
 mkdir -p "$build_root/"{linux,linux-modules,xenomai,xenomai-staging}
 
 # save dependency information
-./dependency-info.sh "${ARGS[@]}" >"$build_root/dependency-info.txt" \
-	|| rm -rf "$build_root/dependency-info.txt"
+./dependency-info.sh "${ARGS[@]}" >"$dependency_info_file" \
+	|| rm -rf "$dependency_info_file"
 
 # copy kernel config to build directory
 cp "$KERNEL_CONFIG" "$build_root/linux/.config"
