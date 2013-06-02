@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VERSION: 1.0.0 (major.minor.patch)
+# VERSION: 1.1.0 (major.minor.patch)
 # Change major or minor version, if the build result may
 # change because of your edits to this script. All configurations
 # will be rebuilt. A change to the 3rd number won't cause a
@@ -19,10 +19,11 @@
 #     might want to use a path without any spaces.
 
 #NOTE You have to install some libraries. On a Debian/Ubuntu you can do this:
-#     sudo aptitude install lib32z1 libncurses5-dev
-#     
-#     lib32z1:         for build tools on x64 host
-#     libncurses5-dev: only for 'make menuconfig'
+#     sudo aptitude install lib32z1 libncurses5-dev \
+#                           git-buildpackage devscripts debhelper dh-kpatches findutils
+#     lib32z1:          for build tools on x64 host
+#     libncurses5-dev:  only for 'make menuconfig'
+#     git-buildpackage: build deb package for Xenomai
 
 #NOTE All config files snould have a trailing newline! If you use vi
 #     or nano, they will automatically do the right thing.
@@ -205,20 +206,141 @@ mkdir -p "$build_root/xenomai"
 #TODO The resulting binaries don't work. I suspect this is because of a wrong
 #     library path. I 'fixed' that by doing the build on the raspberry. However,
 #     I need to find a way to cross-compile it.
-( cd $build_root/xenomai && \
-	$xenomai_root/configure \
-		CFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
-		LDFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
-    	--build=i686-pc-linux-gnu --host=arm-bcm2708-linux-gnueabi )
-make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging"
-# Use install-data-am instead of install to avoid creating the devices which
-# will fail, if we're not root. You have to do something like 'make devices'
-# on the Raspberry to create them.
-at_step "pack xenomai"
-make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging" install-user
-tar -C "$build_root/xenomai-staging" -cjf "$build_root/xenomai-for-pi.tar.bz2" .
-#scp "$build_root/xenomai-for-pi.tar.bz2" rpi:
-#ssh root@rpi tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
+
+# Debian stuff in Xenomai repo is broken. We can either use the repo that is
+# maintained by Debian (TODO where is it?) or quick-fix it.
+# http://www.mail-archive.com/xenomai@xenomai.org/msg00462.html
+#TODO make dh_shlibdeps work with cross-compilation (instead of disabling it)
+#TODO Why does it want a newer version of findutils on wheezy?
+#     (4.4.2 is >=4.2.28, at least I think so *g*)
+( cd xenomai && patch -p0 -N <<EOF || true
+--- debian/xenomai-runtime.install  2013-06-01 22:59:30.037755253 +0200
++++ debian/xenomai-runtime.install  2013-06-01 22:59:40.313755043 +0200
+@@ -4 +3,0 @@
+-usr/share/xenomai
+
+--- debian/rules  2013-06-02 00:09:13.833669395 +0200
++++ debian/rules  2013-06-02 00:09:40.993668837 +0200@@ -120 +120 @@
+-	dh_shlibdeps -i
++	#dh_shlibdeps -i
+@@ -128 +128 @@
+-	dh_builddeb -i
++	dh_builddeb --destdir="\$(DEB_DESTDIR)" -i
+@@ -144 +144 @@
+-	dh_shlibdeps -s
++	#dh_shlibdeps -s
+@@ -154 +154 @@
+-	dh_builddeb -s
++	dh_builddeb --destdir="\$(DEB_DESTDIR)" -s
+
+--- debian.orig/control	2013-06-02 01:05:42.269599860 +0200
++++ debian/control	2013-06-02 01:05:55.237599594 +0200
+@@ -5 +5 @@
+-Build-Depends: debhelper (>= 7), dh-kpatches, findutils (>= 4.2.28)
++Build-Depends: debhelper (>= 7), dh-kpatches
+EOF
+)
+
+# building according to this guide: http://www.xenomai.org/index.php/Building_Debian_packages
+
+TEMP_BRANCH="build-temp-rpi"
+MY_NAME="Benjamin Koch"
+MY_EMAIL="bbbsnowball@gmail.com"
+
+case debuild in
+	git-buildpackage)
+		# delete temporary branch, if it already exists
+		( cd xenomai && git branch -D "$TEMP_BRANCH" || true )
+
+		# create temporary branch and adjust changelog
+		( cd xenomai && git checkout -b "$TEMP_BRANCH" HEAD )
+		( cd xenomai && DEBEMAIL="$MY_EMAIL" DEBFULLNAME="$MY_NAME" debchange "build for Raspberry Pi" )
+		( cd xenomai && git commit -a --author="$MY_NAME <$MY_EMAIL>" -m "build for Raspberry Pi" )
+
+		# build it
+		( cd xenomai && git-buildpackage \
+							--git-debian-branch="$TEMP_BRANCH" \
+							--git-export-dir="$build_root/xenomai-deb" \
+							--git-dist=raspbian \
+							--git-arch=armv6
+							-uc -us )
+
+		# delete the temporary branch
+		( cd xenomai && git checkout HEAD^1 && git branch -D "$TEMP_BRANCH" )
+
+		;;
+
+	debuild)
+		( cd xenomai && DEBEMAIL="$MY_EMAIL" DEBFULLNAME="$MY_NAME" debchange "build for Raspberry Pi" )
+		#TODO ARCH and so on - does it work like this?
+		# see `man dpkg-buildpackage` for info about options
+		#TODO I have armhf, not arm...
+		#TODO get gnu-system-type (-t option) from some variable
+		#NOTE dpkg-buildpackage options must be after other options
+		#TODO pass CFLAGS and such via dpkg-buildflags
+		#NOTE DEB_DESTDIR must 
+
+		#TODO I couldn't get debuild to pass the -t option to dpkg-buildpackage
+		#( cd xenomai && \
+		#	-tarm-bcm2708-linux-gnueabi
+		#	debuild \
+		#	--set-envvar=ARCH="$ARCH" \
+		#	--set-envvar=CROSS_COMPILE="$CROSS_COMPILE" \
+		#	--set-envvar=DEB_CFLAGS_APPEND="-marm -march=armv6 -mtune=arm1136j-s" \
+		#	--set-envvar=DEB_LDFLAGS_APPEND="-marm -march=armv6 -mtune=arm1136j-s" \
+		#	-uc -us -a"$ARCH" -t"$GNU_SYSTEM_TYPE"
+		#	 )
+
+		#TODO We should let dpkg-buildpackage put the files into the build
+		#     directory. Unfortunately, this breaks stuff.
+		#DEB_DESTDIR="$build_root/xenomai/"
+		DEB_DESTDIR=..
+
+		( cd xenomai && \
+			DEB_CFLAGS_APPEND="$XENOMAI_CFLAGS" \
+			DEB_LDFLAGS_APPEND="$XENOMAI_LDFLAGS" \
+			CFLAGS="$XENOMAI_CFLAGS" \
+			LDFLAGS="$XENOMAI_LDFLAGS" \
+			DEB_DESTDIR="$DEB_DESTDIR" \
+			dpkg-buildpackage -a"$ARCH" -t"$GNU_SYSTEM_TYPE" \
+				--changes-option="-u$DEB_DESTDIR"
+		)
+
+		mkdir -p "$build_root/xenomai/deb"
+		mv *.deb xenomai_*.changes xenomai_*.dsc xenomai_*.tar.gz "$build_root/xenomai/deb"
+
+		;;
+
+	tar)
+		#NOTE This does NOT produce working libraries!
+
+		( cd $build_root/xenomai && \
+			$xenomai_root/configure \
+				CFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
+				LDFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
+		    	--build=i686-pc-linux-gnu --host=arm-bcm2708-linux-gnueabi )
+		make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging"
+		# Use install-data-am instead of install to avoid creating the devices which
+		# will fail, if we're not root. You have to do something like 'make devices'
+		# on the Raspberry to create them.
+		at_step "pack xenomai"
+		make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging" install-user
+		tar -C "$build_root/xenomai-staging" -cjf "$build_root/xenomai-for-pi.tar.bz2" .
+		#scp "$build_root/xenomai-for-pi.tar.bz2" rpi:
+		#ssh root@rpi tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
+
+		;;
+
+	*)
+		echo "invalid build method for Xenomai..."
+		exit 1
+		;;
+esac
+
+# copy README file to build dir, so we can save it as a build artifact
+if [ -f "$CONFIG/README" ] ; then
+	cp "$CONFIG/README" "$build_root/"
+fi
 
 
 # quick hack

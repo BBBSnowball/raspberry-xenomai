@@ -68,7 +68,10 @@ dependency_info_file="$build_root/dependency-info.txt"
 # variables for the build
 export PATH="$PATH:$rpi_tools/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin"
 export ARCH=arm
-export CROSS_COMPILE=arm-bcm2708-linux-gnueabi-
+GNU_SYSTEM_TYPE=arm-bcm2708-linux-gnueabi
+export CROSS_COMPILE="$GNU_SYSTEM_TYPE-"
+XENOMAI_CFLAGS="-marm -march=armv6 -mtune=arm1136j-s"
+XENOMAI_LDFLAGS="$XENOMAI_CFLAGS"
 
 
 ### helper functions ###
