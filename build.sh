@@ -20,10 +20,13 @@
 
 #NOTE You have to install some libraries. On a Debian/Ubuntu you can do this:
 #     sudo aptitude install lib32z1 libncurses5-dev \
-#                           git-buildpackage devscripts debhelper dh-kpatches findutils
+#                           git-buildpackage devscripts debhelper dh-kpatches findutils \
+#                           kernel-package
+#     (you may want to add --without-recommends)
 #     lib32z1:          for build tools on x64 host
 #     libncurses5-dev:  only for 'make menuconfig'
 #     git-buildpackage: build deb package for Xenomai
+#     kernel-package:   build deb package for kernel
 
 #NOTE All config files snould have a trailing newline! If you use vi
 #     or nano, they will automatically do the right thing.
@@ -183,18 +186,60 @@ cp "$KERNEL_CONFIG" "$build_root/linux/.config"
 # build tools need some 32-bit libraries
 #aptitude install lib32z1
 
-# kernel will be in $build_root/linux/arch/arm/boot/Image -> copy to rpi:/boot/kernel.img
-#TODO use hardfloat?
-at_step "build kernel"
-make -C linux "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
-cp "$build_root/linux/arch/arm/boot/Image" "$build_root/kernel.img"
-at_step "pack kernel modules"
-make -C linux modules_install "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
-# -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
-##tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
-tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" --exclude=source --exclude=build lib
-#scp "$build_root/linux-modules.tar.bz2" rpi:
-#ssh root@rpi tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
+# choose build method (only tar is working!)
+case tar in
+	kernel-package)
+		# THIS DOESN'T WORK, YET!
+		# I couldn't get kernel-package to build it. Problems:
+		# - It is confused by the -ipipe in the config and aborts.
+		# - I cannot set the system type without dirty tricks.
+
+		# http://elinux.org/RPi_Kernel_Compilation#Perform_the_compilation
+		# http://debiananwenderhandbuch.de/kernelbauen.html
+
+		at_step "build kernel (deb)"
+		#TODO --revision
+		#TODO kernel config
+		#TODO make-kpkg doesn't pass -t to dpkg-architecture, so we have
+		#     to pass it via a trick: set 'ha' in env and don't use --arch,
+		#     so makefile doesn't overwrite 'ha'. This is very brittle and
+		#     is likely to break on anything but wheezy.
+		( cd linux && \
+			ha="-aarm -tarm-bcm2708-linux-gnueabi" \
+			make-kpkg --rootcmd fakeroot --append-to-version="-xenomai" \
+			--arch="$ARCH" --cross-compile="$CROSS_COMPILE" \
+			--us --uc \
+			buildpackage)
+
+		#TODO further steps are missing because I couldn't get the above to work correctly
+
+		;;
+
+	tar)
+		# kernel will be in $build_root/linux/arch/arm/boot/Image -> copy to rpi:/boot/kernel.img
+		#TODO use hardfloat?
+		at_step "build kernel"
+		make -C linux "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
+		cp "$build_root/linux/arch/arm/boot/Image" "$build_root/kernel.img"
+		at_step "pack kernel modules"
+		make -C linux modules_install "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
+		# -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
+		##tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
+		tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" --exclude=source --exclude=build lib
+		#scp "$build_root/linux-modules.tar.bz2" rpi:
+		#ssh root@rpi tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner
+
+		#NOTE We assume that firmware is already present.
+
+		#TODO build a fake deb package
+
+		;;
+
+	*)
+		echo "invalid build method for kernel..."
+		exit 1
+		;;
+esac
 
 # build xenomai
 at_step "build xenomai"
