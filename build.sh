@@ -387,6 +387,9 @@ if [ -f "$CONFIG/README" ] ; then
 	cp "$CONFIG/README" "$build_root/"
 fi
 
+# calculate MD5 checksum of the files (useful for installer)
+( cd "$build_root" && md5sum kernel.img linux-modules.tar.bz2 xenomai/deb/* >md5sums )
+
 
 # quick hack
 #cp -r /usr/xenomai/* /usr
