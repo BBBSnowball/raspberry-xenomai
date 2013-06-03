@@ -8,6 +8,10 @@
 #     - expand root fs, change password, enable ssh, finish config dialog
 #     - add my SSH key
 #     - sudo aptitude update && sudo aptitude install byobu htop
+#     - generate locales:
+#       edit /etc/locale.gen: uncomment all my locales - de_DE.UTF-8 en_GB.UTF-8 en_US.UTF-8
+#       (I use part of all of them - a bit weird, I know ;-)
+#       locale-gen --keep-existing
 
 CONFIG=linux-3.2.21-snowball
 MIRROR=http://192.168.178.57:8000/jenkins/artifact/RaspberryPi-Xenomai/build
@@ -67,5 +71,6 @@ cp kernel.img /boot/kernel.img
 # install xenomai debs
 echo "Installing Xenomai..."
 for deb in "${XENOMAI_DEBS[@]}" ; do
-	dpkg -i "$deb"
+	# We add --force-architecture to install it, even if the architecture is wrong.
+	dpkg -i --force-architecture "$deb"
 done
