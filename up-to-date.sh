@@ -36,7 +36,7 @@ TARGET_FILES=("$build_root/linux-modules.tar.bz2" "$build_root/xenomai-for-pi.ta
 
 # run config script because it might add/change target files
 CONFIG_DEPENDENCIES=yes
-source "$CONFIG/config"
+load_config
 
 
 # Are all target files newer than the dependency-info file?

@@ -7,7 +7,7 @@
 #     a few things:
 #     - expand root fs, change password, enable ssh, finish config dialog
 #     - add my SSH key
-#     - sudo aptitude update && sudo aptitude install byobu htop
+#     - sudo aptitude update && sudo aptitude install byobu htop mosh
 #     - generate locales:
 #       edit /etc/locale.gen: uncomment all my locales - de_DE.UTF-8 en_GB.UTF-8 en_US.UTF-8
 #       (I use part of all of them - a bit weird, I know ;-)

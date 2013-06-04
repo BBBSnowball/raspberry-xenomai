@@ -22,7 +22,9 @@ echo "build.sh version: $BUILD_SH_VERSION"
 
 # run config script
 CONFIG_DEPENDENCIES=yes
-source "$CONFIG/config"
+load_config
+
+# config can set special variables with additional dependencies
 DEP_FILES=("${DEP_FILES[@]}" "$CONFIG/config")
 if [ -n "$DEPENDENCY_INFO" ] ; then
 	echo "$DEPENDENCY_INFO"

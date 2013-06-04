@@ -65,14 +65,6 @@ rpi_tools="$basedir/tools"
 build_root="$basedir/build/$CONFIGNAME"
 dependency_info_file="$build_root/dependency-info.txt"
 
-# variables for the build
-export PATH="$PATH:$rpi_tools/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin"
-export ARCH=arm
-GNU_SYSTEM_TYPE=arm-bcm2708-linux-gnueabi
-export CROSS_COMPILE="$GNU_SYSTEM_TYPE-"
-XENOMAI_CFLAGS="-marm -march=armv6 -mtune=arm1136j-s"
-XENOMAI_LDFLAGS="$XENOMAI_CFLAGS"
-
 
 ### helper functions ###
 
@@ -84,4 +76,26 @@ at_step() {
 	if [ "$TERM" == screen ] ; then
 		echo -ne '\033k'"$1"'\033\\'
 	fi
+}
+
+load_config() {
+	# default values for variables that are likely
+	# to be changed by the config script
+	ARCH=arm
+	GNU_SYSTEM_TYPE=arm-bcm2708-linux-gnueabi
+	XENOMAI_CFLAGS="-marm -march=armv6 -mtune=arm1136j-s"
+
+	source "$CONFIG/config"
+
+	# some more default values
+	# These depend on the value of other variables, so we set them after
+	# calling the config script (unless the script provides a value).
+	if [ -z "$CROSS_COMPILE"   ] ; then CROSS_COMPILE="$GNU_SYSTEM_TYPE-" ; fi
+	if [ -z "$XENOMAI_LDFLAGS" ] ; then XENOMAI_LDFLAGS="$XENOMAI_CFLAGS" ; fi
+	if [ -z "$KERNEL_ARCH"     ] ; then KERNEL_ARCH="$ARCH"               ; fi
+
+	# make sure we can call the compiler
+	#NOTE We add it at the end, so any directory added by the config
+	#     script will take precedence.
+	export PATH="$PATH:$rpi_tools/arm-bcm2708/$GNU_SYSTEM_TYPE/bin"
 }

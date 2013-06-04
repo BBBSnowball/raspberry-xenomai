@@ -115,14 +115,18 @@ fi
 # ADEOS_PATCH="$xenomai_root/ksrc/arch/arm/patches/ipipe-core-3.2.21-arm-1.patch"
 # KERNEL_CONFIG=...
 at_step "load config"
-source "$CONFIG/config"
+load_config
 
 # can we access the compiler?
 at_step "test compiler"
-if ! arm-bcm2708-linux-gnueabi-gcc --version ; then
-	if which arm-bcm2708-linux-gnueabi-gcc >/dev/null ; then
+if ! "$CROSS_COMPILE"gcc --version ; then
+	if which "$CROSS_COMPILE"gcc >/dev/null ; then
 		echo "ARM compiler exists and is in PATH, but we cannot run it." >&2
-		echo "You may have to install something (TODO: find out dependencies)." >&2
+		echo "You may have to install some library (try lib32z1)." >&2
+		if which ldd >/dev/null ; then
+			echo >&2
+			ldd "$(which "$CROSS_COMPILE"gcc)" >&2
+		fi
 		exit 1
 	else
 		echo "Couldn't find ARM compiler, but it should be in the tools git. This is weird. Sorry." >&2
@@ -137,7 +141,7 @@ make -C "$linux_tree" mrproper
 
 # apply Xenomai patch to kernel
 at_step "prepare linux tree for xenomai"
-"$xenomai_root/scripts/prepare-kernel.sh" --arch="$ARCH" --adeos="$ADEOS_PATCH" --linux="$linux_tree"
+"$xenomai_root/scripts/prepare-kernel.sh" --arch="$KERNEL_ARCH" --adeos="$ADEOS_PATCH" --linux="$linux_tree"
 
 # apply our patches
 at_step "apply patches"
@@ -205,9 +209,9 @@ case tar in
 		#     so makefile doesn't overwrite 'ha'. This is very brittle and
 		#     is likely to break on anything but wheezy.
 		( cd linux && \
-			ha="-aarm -tarm-bcm2708-linux-gnueabi" \
+			ha="-a$ARCH -t$GNU_SYSTEM_TYPE" \
 			make-kpkg --rootcmd fakeroot --append-to-version="-xenomai" \
-			--arch="$ARCH" --cross-compile="$CROSS_COMPILE" \
+			--cross-compile="$CROSS_COMPILE" \
 			--us --uc \
 			buildpackage)
 
@@ -219,10 +223,10 @@ case tar in
 		# kernel will be in $build_root/linux/arch/arm/boot/Image -> copy to rpi:/boot/kernel.img
 		#TODO use hardfloat?
 		at_step "build kernel"
-		make -C linux "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
+		make -C linux "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
 		cp "$build_root/linux/arch/arm/boot/Image" "$build_root/kernel.img"
 		at_step "pack kernel modules"
-		make -C linux modules_install "ARCH=$ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
+		make -C linux modules_install "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
 		# -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
 		##tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
 		tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" --exclude=source --exclude=build lib
@@ -359,11 +363,13 @@ case debuild in
 	tar)
 		#NOTE This does NOT produce working libraries!
 
+		#TODO this assumes a x64 build system...
+
 		( cd $build_root/xenomai && \
 			$xenomai_root/configure \
-				CFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
-				LDFLAGS="-marm -march=armv6 -mtune=arm1136j-s" \
-		    	--build=i686-pc-linux-gnu --host=arm-bcm2708-linux-gnueabi )
+				CFLAGS="$XENOMAI_CFLAGS" \
+				LDFLAGS="$XENOMAI_LDFLAGS" \
+		    	--build=i686-pc-linux-gnu --host="$GNU_SYSTEM_TYPE" )
 		make -C "$build_root/xenomai" DESTDIR="$build_root/xenomai-staging"
 		# Use install-data-am instead of install to avoid creating the devices which
 		# will fail, if we're not root. You have to do something like 'make devices'
