@@ -13,8 +13,9 @@ reproduce the measurements, but we couldn't get the Cleverscope software to gene
 got similar results: With the xenomai kernel, jitter is quite reasonable until you get below 100us. If you go
 down to 30us, jitter is huge. And below that you get the wrong frequency or it doesn't work at all.
 
-***The script does NOT work yet!***
-(Xenomai executables won't start because they don't find their libraries; see below)
+***The script has some rough edges! I don't consider it finished, yet!*** (see below)
+
+***I use Raspbian hardfloat and I haven't (and probably won't) test anything else!***
 
 Configuration
 -------------
@@ -37,8 +38,7 @@ Download
 
 I have a CI server that builds the kernel. You can download the compiled files from there. It might be slow
 because the server is behind a DSL connection. Please consider uploading the files to your server instead of
-sharing this link. You need linux-modules.tar.bz2, kernel.img and xenomai-for-pi.tar.bz2. Take those files
-and skip ahead to Install.
+sharing this link. You can simply use the install.sh script which will download the files for you (see Install).
 
 [Download build artifacts](http://jenkins.bbbsnowball.de:3000/jenkins/artifact/RaspberryPi-Xenomai/build/)
 
@@ -59,49 +59,53 @@ If you pass the --clean-sources parameter to one of the scripts, it will kill AL
 files in the submodules (or rather all folders mentioned in the versions file of the config). YOU WILL LOOSE
 ALL MANUAL CHANGES TO THOSE FILES! Therefore, you have to explicitely state that you really want that.
 
-The build will generate two tar files and the kernel in build/$configname/. These are the same files that you
-could have downloaded from my server. Now, go ahead to the Install section.
+You may also have to install some dependencies. I'm only listing the ones that I had to install on my Debian
+wheezy system. Please tell me, if some are missing. You can find more details (and probably a more up-to-date
+list) at the start of the build.sh script. The script won't tell you about the dependencies - it will fail
+in some way. Hopefully, you can guess the missing thing from the message.
+
+The build will generate the kernel, a modules tar file and Xenomai deb packages in build/$configname/. These
+are the same files that you could have downloaded from my server. Now, go ahead to the Install section.
 
 Install
 -------
 
-This does NOT work, yet. Please see the details in the next section.
+You have to choose a configuration. Please make sure that it matches your system (arm (or no tag) for softfloat,
+armhf for hardfloat). In any case, the Debian packages are tagged as `arm`, so you need to force installation
+on `armhf`. However, the packages ARE different, so choose the right one.
 
-1. copy the files to your Raspberry Pi<br/>
-    `scp linux-modules.tar.bz2 kernel.img xenomai-for-pi.tar.bz2 raspberry:`
+1. get install.sh<br/>
+    `wget https://raw.github.com/BBBSnowball/raspberry-xenomai/master/install.sh`
   
-2. open a root shell on the Pi - all further steps have to be done on the Pi<br/>
-    `ssh raspberry # or mosh raspberry, if you prefer`<br/>
-    `sudo -s`
+2. edit it and change CONFIG, MIRROR and XENOMAI_VERSION
 
-3. move kernel to /boot partition<br/>
-  `cp /boot/kernel.img ~/kernel.img.backup`<br/>
-  `cp ~/kernel.img /boot/kernel.img`
+3. run install.sh - it will download and install the files<br/>
+  `chmod +x install.sh` <br/>
+  `sudo ./install.sh`
 
-4. unpack linux modules<br/>
-  `tar -C / -xjf ~/linux-modules.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner`
-
-5. unpack Xenomai runtime and development files<br/>
-  `tar -C / -xjf ~/xenomai-for-pi.tar.bz2 --no-overwrite-dir --no-same-permissions --no-same-owner`
-
-6. reboot the Pi and hope that it works<br/>
+4. reboot the Pi and hope that it works<br/>
   `reboot`
 
-7. create device files: see next section
+5. try Xenomai<br/>
+  `/usr/lib/xenomai/latency`
 
-8. try Xenomai; this will most likely fail - see next section<br/>
-  `/usr/xenomai/bin/latency`
+Debian packages for the kernel
+------------------------------
 
-Library path issues
--------------------
+In theory, I could simply use kernel-package, but that doesn't work. Chris Boot has used it to build his
+modified kernel, but he had to patch kernel-package to make it work on Debian wheezy.
 
-Xenomai lives in /usr/xenomai instead of /usr (as most software). Therefore, the dynamic linker won't find
-the library and the programs won't start. I tried a few simple hacks, but none of them made it work (don't
-try to copy the files to /usr - it won't work). On my test setup, I have solved it by compiling Xenomai on
-the Pi. I'm still trying to find a better way.
+I'm not building debs for the kernel because...
+* I couldn't easily find Chris' modified kernel-package (not in his repo anymore).
+* I don't want to make modifications to the build system (except installing some software).
+* The other method sort of works (although I would prefer deb packages, of course).
 
-This also creates the device nodes. We could deliver them in the Xenomai tar ball, but then we would have to
-be the root user on the build system. You can run `make devices` in the Xenomai source tree to create the
-device files.
+Debian packages for Xenomai
+---------------------------
 
-I hope that both problems can be solved by using deb packages instead of tar balls, but I'm still working on that.
+The debs for Raspbian hardfloat are tagged `arm` instead of `armhf`. Therefore, you have to install them with
+`dpkg --force-architecture -i ...`. If I tell `dpkg-buildpackage` to build it for `armhf`, it will use the
+build system compiler (amd64 in my case). However, I can tell it to build `arm` and let it use the hardfloat
+compiler. This works, but I hope that I can improve that.
+
+The debs for softfloat (`arm`) should be fine, but I haven't tested.
