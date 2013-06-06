@@ -1,2 +1,3 @@
 ADEOS_PATCH="$xenomai_root/ksrc/arch/arm/patches/ipipe-core-3.2.21-arm-1.patch"
 KERNEL_CONFIG="$CONFIG/kernel-config"
+linux_tree="$basedir/linux-bootc"

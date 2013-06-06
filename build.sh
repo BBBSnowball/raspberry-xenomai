@@ -74,8 +74,8 @@ fi
 
 # we may have to fetch the submodules
 at_step "fetch dependencies"
-git submodule init
-git submodule update
+git submodule sync
+git submodule update --init
 
 # checkout right version of kernel and xenomai and kill
 # any changes and unversioned files
@@ -206,7 +206,7 @@ case tar in
 		#     to pass it via a trick: set 'ha' in env and don't use --arch,
 		#     so makefile doesn't overwrite 'ha'. This is very brittle and
 		#     is likely to break on anything but wheezy.
-		( cd linux && \
+		( cd "$linux_tree" && \
 			ha="-a$ARCH -t$GNU_SYSTEM_TYPE" \
 			make-kpkg --rootcmd fakeroot --append-to-version="-xenomai" \
 			--cross-compile="$CROSS_COMPILE" \
@@ -221,10 +221,10 @@ case tar in
 		# kernel will be in $build_root/linux/arch/arm/boot/Image -> copy to rpi:/boot/kernel.img
 		#TODO use hardfloat?
 		at_step "build kernel"
-		make -C linux "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
+		make -C "$linux_tree" "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
 		cp "$build_root/linux/arch/$KERNEL_ARCH/boot/Image" "$build_root/kernel.img"
 		at_step "pack kernel modules"
-		make -C linux modules_install "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
+		make -C "$linux_tree" modules_install "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
 		# -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
 		##tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" lib/firmware/ lib/modules/*/modules.* lib/modules/*/kernel
 		tar -C "$build_root/linux-modules" -cjf "$build_root/linux-modules.tar.bz2" --exclude=source --exclude=build lib
@@ -407,7 +407,7 @@ case debuild in
 
 	tar)
 		#NOTE This does NOT produce working libraries!
-		
+
 		# This message is printed by the Xenomai 'make install'. I think this is
 		# the reason that the files don't work on the Raspberry (if compiled on
 		# the host).
