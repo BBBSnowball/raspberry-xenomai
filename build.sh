@@ -75,7 +75,13 @@ fi
 # we may have to fetch the submodules
 at_step "fetch dependencies"
 git submodule sync
-git submodule update --init
+if [ "$CLEAN_SOURCES" -gt 0 ] ; then
+	# we are allowed to throw away changes, so we can tell git to continue no matter what
+	git submodule update --init --force
+else
+	# this will probably fail because git will rather fail than overwrite changed files
+	git submodule update --init
+fi
 
 # checkout right version of kernel and xenomai and kill
 # any changes and unversioned files
