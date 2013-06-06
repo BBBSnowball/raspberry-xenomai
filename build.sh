@@ -403,6 +403,8 @@ case debuild in
 				set_arch "$DEB" "$FIX_DEB_ARCH"
 			done
 
+		fi
+
 		;;
 
 	tar)
