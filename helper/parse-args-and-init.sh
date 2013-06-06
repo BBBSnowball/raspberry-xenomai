@@ -82,20 +82,39 @@ load_config() {
 	# default values for variables that are likely
 	# to be changed by the config script
 	ARCH=arm
-	GNU_SYSTEM_TYPE=arm-bcm2708-linux-gnueabi
+	REAL_ARCH=arm
 	XENOMAI_CFLAGS="-marm -march=armv6 -mtune=arm1136j-s"
 
 	source "$CONFIG/config"
 
+	# more default values
+	# These depend on the architecture we're building for, so we
+	# set them after the config script runs.
+	case "$REAL_ARCH" in
+		arm)
+			if [ -z "$GNU_SYSTEM_TYPE" ] ; then GNU_SYSTEM_TYPE=arm-bcm2708-linux-gnueabi ; fi
+			;;
+
+		armhf)
+			if [ -z "$GNU_SYSTEM_TYPE" ] ; then GNU_SYSTEM_TYPE=arm-bcm2708hardfp-linux-gnueabi ; fi
+			;;
+
+		*)
+			echo "Unsupported REAL_ARCH: $REAL_ARCH" >&2
+			exit 1
+		;;
+	esac
+
 	# some more default values
 	# These depend on the value of other variables, so we set them after
 	# calling the config script (unless the script provides a value).
-	if [ -z "$CROSS_COMPILE"   ] ; then CROSS_COMPILE="$GNU_SYSTEM_TYPE-" ; fi
-	if [ -z "$XENOMAI_LDFLAGS" ] ; then XENOMAI_LDFLAGS="$XENOMAI_CFLAGS" ; fi
-	if [ -z "$KERNEL_ARCH"     ] ; then KERNEL_ARCH="$ARCH"               ; fi
+	if [ -z "$CROSS_COMPILE"    ] ; then CROSS_COMPILE="$GNU_SYSTEM_TYPE-" ; fi
+	if [ -z "$XENOMAI_LDFLAGS"  ] ; then XENOMAI_LDFLAGS="$XENOMAI_CFLAGS" ; fi
+	if [ -z "$KERNEL_ARCH"      ] ; then KERNEL_ARCH="$ARCH"               ; fi
+	if [ -z "$COMPILER_BIN_DIR" ] ; then COMPILER_BIN_DIR="$rpi_tools/arm-bcm2708/$GNU_SYSTEM_TYPE/bin" ; fi
 
 	# make sure we can call the compiler
 	#NOTE We add it at the end, so any directory added by the config
 	#     script will take precedence.
-	export PATH="$PATH:$rpi_tools/arm-bcm2708/$GNU_SYSTEM_TYPE/bin"
+	export PATH="$PATH:$COMPILER_BIN_DIR"
 }

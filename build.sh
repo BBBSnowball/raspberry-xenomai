@@ -74,10 +74,8 @@ fi
 
 # we may have to fetch the submodules
 at_step "fetch dependencies"
-#if [ ! -d "linux" -o ! -d "tools" -o ! -d "xenomai" ] ; then
-	git submodule init
-	git submodule update
-#fi
+git submodule init
+git submodule update
 
 # checkout right version of kernel and xenomai and kill
 # any changes and unversioned files
@@ -224,7 +222,7 @@ case tar in
 		#TODO use hardfloat?
 		at_step "build kernel"
 		make -C linux "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux"
-		cp "$build_root/linux/arch/arm/boot/Image" "$build_root/kernel.img"
+		cp "$build_root/linux/arch/$KERNEL_ARCH/boot/Image" "$build_root/kernel.img"
 		at_step "pack kernel modules"
 		make -C linux modules_install "ARCH=$KERNEL_ARCH" "CROSS_COMPILE=$CROSS_COMPILE" "O=$build_root/linux" INSTALL_MOD_PATH="$build_root/linux-modules"
 		# -> copy lib/modules/* to rpi:/lib/modules [only files and kernel dir, without source and build]
@@ -323,8 +321,6 @@ case debuild in
 		( cd xenomai && DEBEMAIL="$MY_EMAIL" DEBFULLNAME="$MY_NAME" debchange "build for Raspberry Pi" )
 		#TODO ARCH and so on - does it work like this?
 		# see `man dpkg-buildpackage` for info about options
-		#TODO I have armhf, not arm...
-		#TODO get gnu-system-type (-t option) from some variable
 		#NOTE dpkg-buildpackage options must be after other options
 		#TODO pass CFLAGS and such via dpkg-buildflags
 		#NOTE DEB_DESTDIR must 
@@ -358,10 +354,82 @@ case debuild in
 		mkdir -p "$build_root/xenomai/deb"
 		mv *.deb xenomai_*.changes xenomai_*.dsc xenomai_*.tar.gz "$build_root/xenomai/deb"
 
+		if [ "$ARCH" != "$FIX_DEB_ARCH" ] ; then
+			# we have to compile for arm because dpkg tools don't work for ARCH=armhf
+			# -> fix ARCH after building debs
+
+			set_arch() {
+				DEB_FILE="$1"
+				WANTED_ARCH="$2"
+
+				# we need a temporary directory
+				T="$(tempfile)"
+				rm "$T"
+				mkdir "$T"
+
+				# extract files and control files
+				dpkg-deb -R "$DEB_FILE" "$T"
+
+				# fix ARCH
+				#TODO any other places?
+				sed -ie 's/^Architecture: .*$/Architecture: '"$WANTED_ARCH"'/' "$T/DEBIAN/control"
+
+				echo
+				echo "DEBUG: looking for 'arm' in $DEB_FILE/DEBIAN after fixing"
+				grep -r "arm" "$T/DEBIAN"
+				echo "END DEBUG"
+				echo
+
+				# pack modified files
+				#NOTE The file gets a different name now because ARCH has changed.
+				DEB_FILE_FIXED="$(echo "$DEB_FILE" | sed -ne 's/_[a-z0-9A-Z]*\?\.deb$/_'"$WANTED_ARCH"'.deb/p')"
+				if [ -z "$DEB_FILE_FIXED" ] ; then
+					echo "ERROR: Couldn't determine name of fixed deb file" >&2
+					exit 1
+				fi
+				#TODO If we parse a directory as the second argument, dpkg-deb will determine the name.
+				dpkg-deb -b "$T" "$DEB_FILE_FIXED"
+
+				# remove temporary directory
+				rm -rf "$T"
+
+				# remove deb with wrong ARCH
+				if [ "$DEB_FILE" != "$DEB_FILE_FIXED" ] ; then
+					rm "$DEB_FILE"
+				fi
+			}
+
+			for deb in "$build_root/xenomai/deb/"*"_$ARCH.deb" ; do
+				set_arch "$DEB" "$FIX_DEB_ARCH"
+			done
+
 		;;
 
 	tar)
 		#NOTE This does NOT produce working libraries!
+		
+		# This message is printed by the Xenomai 'make install'. I think this is
+		# the reason that the files don't work on the Raspberry (if compiled on
+		# the host).
+		## ----------------------------------------------------------------------
+		## Libraries have been installed in:
+		##    /usr/xenomai/lib
+		## 
+		## If you ever happen to want to link against installed libraries
+		## in a given directory, LIBDIR, you must either use libtool, and
+		## specify the full pathname of the library, or use the `-LLIBDIR'
+		## flag during linking and do at least one of the following:
+		##    - add LIBDIR to the `LD_LIBRARY_PATH' environment variable
+		##      during execution
+		##    - add LIBDIR to the `LD_RUN_PATH' environment variable
+		##      during linking
+		##    - use the `-Wl,-rpath -Wl,LIBDIR' linker flag
+		##    - have your system administrator add LIBDIR to `/etc/ld.so.conf'
+		## 
+		## See any operating system documentation about shared libraries for
+		## more information, such as the ld(1) and ld.so(8) manual pages.
+		## ----------------------------------------------------------------------
+
 
 		#TODO this assumes a x64 build system...
 
@@ -395,32 +463,3 @@ fi
 
 # calculate MD5 checksum of the files (useful for installer)
 ( cd "$build_root" && md5sum kernel.img linux-modules.tar.bz2 xenomai/deb/* >md5sums )
-
-
-# quick hack
-#cp -r /usr/xenomai/* /usr
-#ldconfig
-#=> doesn't work anyway :-(
-#=> building on RPi			<=============================== !!!!!!!!
-
-# This message is printed by the Xenomai 'make install'. I think this is
-# the reason that the files don't work on the Raspberry (if compiled on
-# the host).
-## ----------------------------------------------------------------------
-## Libraries have been installed in:
-##    /usr/xenomai/lib
-## 
-## If you ever happen to want to link against installed libraries
-## in a given directory, LIBDIR, you must either use libtool, and
-## specify the full pathname of the library, or use the `-LLIBDIR'
-## flag during linking and do at least one of the following:
-##    - add LIBDIR to the `LD_LIBRARY_PATH' environment variable
-##      during execution
-##    - add LIBDIR to the `LD_RUN_PATH' environment variable
-##      during linking
-##    - use the `-Wl,-rpath -Wl,LIBDIR' linker flag
-##    - have your system administrator add LIBDIR to `/etc/ld.so.conf'
-## 
-## See any operating system documentation about shared libraries for
-## more information, such as the ld(1) and ld.so(8) manual pages.
-## ----------------------------------------------------------------------

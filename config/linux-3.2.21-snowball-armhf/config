@@ -1,7 +1,4 @@
-ADEOS_PATCH="$xenomai_root/ksrc/arch/arm/patches/ipipe-core-3.2.21-arm-1.patch"
-KERNEL_CONFIG="$CONFIG/kernel-config"
+source "$basedir/config/linux-3.2.21-snowball-arm/config"
 
-ARCH=armhf
-KERNEL_ARCH=arm
-GNU_SYSTEM_TYPE=arm-bcm2708hardfp-linux-gnueabi
-CROSS_COMPILE="$GNU_SYSTEM_TYPE-"
+ARCH=arm
+REAL_ARCH=armhf
