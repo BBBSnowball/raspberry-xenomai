@@ -364,6 +364,8 @@ case debuild in
 			# we have to compile for arm because dpkg tools don't work for ARCH=armhf
 			# -> fix ARCH after building debs
 
+			at_step "fix ARCH of xenomai debs"
+
 			set_arch() {
 				DEB_FILE="$1"
 				WANTED_ARCH="$2"
@@ -406,7 +408,7 @@ case debuild in
 			}
 
 			for deb in "$build_root/xenomai/deb/"*"_$ARCH.deb" ; do
-				set_arch "$DEB" "$FIX_DEB_ARCH"
+				set_arch "$deb" "$FIX_DEB_ARCH"
 			done
 
 		fi
