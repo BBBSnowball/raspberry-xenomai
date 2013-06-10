@@ -8,6 +8,10 @@ progress, so don't expect it to be stable!
 I suggest that you learn how to compile it yourself. I found a guide that makes it really easy. My script
 is based on that guide. And here it is: http://diy.powet.eu/2012/07/25/raspberry-pi-xenomai/
 
+The patches have been created by ian-cim and Paul. Lot's of thanks to you. You're great!
+* ian-cim for Kernel 3.2.21, see [here](http://www.raspberrypi.org/phpBB3/viewtopic.php?f=41&t=12368)
+* Paul for later kernels, see [here](http://www.xenomai.org/pipermail/xenomai/2013-February/027752.html) and follow his posts to the Xenomai mailinglist
+
 This site has some timing measurements and you can use the programs to test the kernel on your Pi. We tried to
 reproduce the measurements, but we couldn't get the Cleverscope software to generate histographs. However, we
 got similar results: With the xenomai kernel, jitter is quite reasonable until you get below 100us. If you go
